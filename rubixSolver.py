@@ -3,6 +3,7 @@ import pymel.core as pmc
 from pymel.core.datatypes import Vector
 from random import random
 import uuid
+from collections import Counter
 #vector region
 #region
 # vector substration
@@ -296,6 +297,78 @@ def generateCleanCube():
 
 
 #region
+        
+        
+
+class Tester():
+    def __init__(self):
+        self.file =  open("G:\My Drive\Maya\MyScripts\Rubix\Testing\RubixTestingLog.txt", "a")
+
+    def close(self):
+        self.file.close()
+
+    def writeTestSuccess(self, testNumber):
+        string = "================================= Test #" + str(testNumber) + " Cleared ============================================= \n"
+        print(string)
+        self.file.writelines(string)
+    
+    def writeTestFailure(self, testNumber, testName):
+        string = "================================= Test #"+str(testNumber)+" Failed at "+ testName+" ============================================= \n"
+        print(string)
+        self.file.writelines(string)
+
+    def testStep0(self):
+        # test daisy
+        assertion = [x.normal("white") == [0,1,0] for x in whiteList if len(x.colors) == 2]
+        return all(assertion)
+
+    def testStep1(self):
+        # test white cross
+        assertion = [x.normal("white") == [0,-1,0] for x in whiteList if (len(x.colors) == 2 or len(x.colors) == 1)]
+        return all(assertion)
+    
+    def testStep2(self):
+        # test white corners
+        # test all white corners faces are no bottom row
+        assertion = [x.normal("white") == [0,-1,0] for x in whiteList if (len(x.colors) == 3)]
+        # check that all corners are matching kernel orientation
+        assertion2 = all([all([all([x.normal(color) == [kernel for kernel in kernelList if color in kernel.colors][0].normal(color)]) for color in x.colors if color != "white"]) for x in whiteList if len(x.colors) == 3])
+        return all([assertion, assertion2])
+    
+    def testStep3(self):
+        # test edges to middle
+        lateralEdges = [x for x in edgesList if x.height()[1] == 0]
+        return(all([all([x.normal(color) == [kernel for kernel in kernelList if color in kernel.colors][0].normal(color) for color in x.colors]) for x in lateralEdges]))
+    
+    def testStep4(self):
+        # test yellow cross
+        assertion = [x.normal("yellow") == [0,1,0] for x in yellowList if (len(x.colors) == 2 or len(x.colors) == 1)]
+        return all(assertion)
+
+    def testStep5(self):
+        # test yellow edges
+        assertion = [[x.normal(color) == [kernel for kernel in kernelList if kernel.colors[0] == color][0].normal(color) for color in x.colors if color != "yellow"][0] for x in yellowList if len(x.colors) == 2]
+        return all(assertion)
+    
+    def testStep6(self):
+        # test yellow corners are placed
+        assertion = [[x.normal(color) == [kernel for kernel in kernelList if kernel.colors[0] == color][0].normal(color) for color in x.colors if color != "yellow"][0] for x in yellowList if len(x.colors) == 3]
+        assertion = [
+            [
+                [Vector([kernel for kernel in kernelList if color in kernel.colors][0].height())for color in x.colors if color!= "yellow"][0]
+                + [Vector([kernel for kernel in kernelList if color in kernel.colors][0].height())for color in x.colors if color!= "yellow"][1]
+                + Vector(0,1,0) == Vector(x.height())][0]
+            for x in yellowList if len(x.colors) == 3]
+        return all(assertion)
+    
+    def testStep7(self):
+        # test yellow corners are placed
+        assertion = [[x.normal(color) == [kernel for kernel in kernelList if kernel.colors[0] == color][0].normal(color) for color in x.colors if color != "yellow"][0] for x in yellowList if len(x.colors) == 3]
+        return all(assertion)
+
+tester  = Tester()
+
+
 
 # #find all whites and edges
 for i in cube:
@@ -1087,7 +1160,7 @@ def Step5__swapYellowEdges():
             break
 
 def Step6__positionYellowCorners():
-    # first, check if any of the corners are in the right position
+    
     def __swapAlgorithm(machine):
         machine.top("ccw")
         machine.right("ccw")
@@ -1098,13 +1171,24 @@ def Step6__positionYellowCorners():
         machine.top("cw")
         machine.left("cw")
 
-    def __step6Recursion(counter):
-        if(counter <= 0):
+    def __step6Recursion(counter, random = False):
+        # First, this function needs to find if there is any corners in the correct place
+        # If one is found, orient the cube appropriately and run the swap algorith
+        # This will rotate the other 3 corners clockwise around the cube
+        # Check if the cube is solved, if not, run algo again
+
+        # Else, no corners in the right position
+        # Run algo for a random corner
+        # Check if any are correctly placed
+        # Else run it again
+
+
+        if(counter <= 0 or tester.testStep6()):
             return
             
         corners = [x for x in yellowList if len(x.colors) == 3]
         matched = False
-
+        # first, check if any of the corners are in the right position
         for corner in corners:
             # get all adjacent kernels
             kernelColors = [x.colors[0] for x in kernelList if x.normals()[0] in corner.normals()]
@@ -1112,13 +1196,15 @@ def Step6__positionYellowCorners():
                 matched = corner
                 break
 
+        if(random and not matched):
+            matched = corners[0]
+        
         if(matched):
-            print("Matched ", matched.name())
             # set the machine facing the node with it top right of the cube
             # # again, we can leverage mayas face normal to detect which node needs to be the driver
-            # driver = node1
-            node1Color = [x for x in matched.colors if x != "yellow"][0]
-            node2Color = [x for x in matched.colors if x != "yellow"][1]
+            print(matched.name())
+            node1Color = [x for x in matched.colors if matched.normal(x) != [0, 1, 0]][0]
+            node2Color = [x for x in matched.colors if matched.normal(x) != [0, 1, 0]][1]
             firstNodePosition = Vector(matched.normal(node1Color))
             secondNodePosition = Vector(matched.normal(node2Color))
             driver = node1Color
@@ -1133,13 +1219,22 @@ def Step6__positionYellowCorners():
             if(planeNormal != secondNodePosition):
                 driver = node2Color
             facing = facingFunction(matched, driver)
-            print(facing)
+            print(facing, driver)
             machine = Handler(facing)
             __swapAlgorithm(machine)
+
+            checked = tester.testStep6()
+            if(not checked and not random):
+                __swapAlgorithm(machine)
+                return
+            if(not checked and random):
+                __step6Recursion(counter -1, True)
+
+            
             
         else:
             print("No match found")
-            __step6Recursion(counter -1)
+            __step6Recursion(counter -1, True)
 
     __step6Recursion(4)
     # if not, rotate and check again
@@ -1160,7 +1255,7 @@ def Step7__orientYellowCorners():
         node1 = corners[0]
         node2 = corners[1]
         # im pretty sure that if nodes are on the same side, adding them up will total 4, but if theyre on opposite sides, it will be 2. This needs further testing
-        total = sum(list(Vector(node1.height())+ Vector(node2.height())))
+        total = sum(abs((Vector(node1.height())+ Vector(node2.height()))))
 
         # same side
         # if yellows are facing the same direction, order changes
@@ -1206,6 +1301,7 @@ def Step7__orientYellowCorners():
                 
             # __swapAlgorithm(machine)
         elif(total == 2):
+            print("total 2")
             # facing = facingFunction(driver, [color for color in driver.colors if (color != "yellow" and driver.normal(color) != [0,1,0])][0])
             machine = Handler(facingFunction(driver, "yellow"))
             machine.top("cw")
@@ -1259,12 +1355,10 @@ def Step7__orientYellowCorners():
         # find the kernel that matches the upwards facing color
         lateralColor = [color for color in driverNode.colors if color != "yellow" and driverNode.normal(color) != [0,1,0]][0]
 
+        print(driverNode.name())
         if(driverNode.position(lateralColor) == "left"):
         # else algo is applied 2x per corner
             print("left")
-        else:
-        # if upward face (not yellow) needs to rotate left, 4x algo per corner
-            print("right")
             machine = Handler(facing)
             __swapAlgorithm(machine)
             __swapAlgorithm(machine)
@@ -1282,12 +1376,52 @@ def Step7__orientYellowCorners():
             __swapAlgorithm(machine)
             __swapAlgorithm(machine)
             machine.top("cw")
+        else:
+        # if upward face (not yellow) needs to rotate left, 4x algo per corner
+            print("right")
+            machine = Handler(facing)
+            __swapAlgorithm(machine)
+            __swapAlgorithm(machine)
+            machine.top("cw")
+            __swapAlgorithm(machine)
+            __swapAlgorithm(machine)
+            machine.top("cw")
+            machine.top("cw")
+            __swapAlgorithm(machine)
+            __swapAlgorithm(machine)
+            machine.top("cw")
 
 
         pass
 
     def __orient4Corners(corners):
-        print(corners)
+        # 2 corners yellow faces will be pointing in the same direction
+        corners = [x for x in yellowList if len(x.colors) == 3]
+        normals = [x.normal("yellow") for x in corners]
+        neighbors = list({x for x in corners if normals.count(x.normal("yellow")) > 1})
+        
+        facing = facingFunction(neighbors[0], "yellow")
+        machine = Handler(facing)
+
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        machine.top("ccw")
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        machine.top("ccw")
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        machine.top("ccw")
+        __swapAlgorithm(machine)
+        __swapAlgorithm(machine)
+        machine.top("ccw")
+
+
+
 
     # figure out how many corners are wrong
     incorrectOrientation = []
@@ -1297,87 +1431,19 @@ def Step7__orientYellowCorners():
             incorrectOrientation.append(corner)
     
     if(len(incorrectOrientation) == 2):
+        print("Step7: Orienting 2")
         __orient2Corners(incorrectOrientation)
     
     if(len(incorrectOrientation) == 3):
+        print("Step7: Orienting 3")
         __orient3Corners(incorrectOrientation)
     
     if(len(incorrectOrientation) == 4):
+        print("Step7: Orienting 4")
         __orient4Corners(incorrectOrientation)
         
 # generateCleanCube()
 #endregion
-
-scrambleCounter = 10
-maxIterations = 5
-
-class Tester():
-    def __init__(self):
-        self.file =  open("G:\My Drive\Maya\MyScripts\Rubix\Testing\RubixTestingLog.txt", "a")
-
-    def close(self):
-        self.file.close()
-
-    def writeTestSuccess(self, testNumber):
-        string = "================================= Test #" + str(testNumber) + " Cleared ============================================= \n"
-        print(string)
-        self.file.writelines(string)
-    
-    def writeTestFailure(self, testNumber, testName):
-        string = "================================= Test #"+str(testNumber)+" Failed at "+ testName+" ============================================= \n"
-        print(string)
-        self.file.writelines(string)
-
-    def testStep0(self):
-        # test daisy
-        assertion = [x.normal("white") == [0,1,0] for x in whiteList if len(x.colors) == 2]
-        return all(assertion)
-
-    def testStep1(self):
-        # test white cross
-        assertion = [x.normal("white") == [0,-1,0] for x in whiteList if (len(x.colors) == 2 or len(x.colors) == 1)]
-        return all(assertion)
-    
-    def testStep2(self):
-        # test white corners
-        # test all white corners faces are no bottom row
-        assertion = [x.normal("white") == [0,-1,0] for x in whiteList if (len(x.colors) == 3)]
-        # check that all corners are matching kernel orientation
-        assertion2 = all([all([all([x.normal(color) == [kernel for kernel in kernelList if color in kernel.colors][0].normal(color)]) for color in x.colors if color != "white"]) for x in whiteList if len(x.colors) == 3])
-        return all([assertion, assertion2])
-    
-    def testStep3(self):
-        # test edges to middle
-        lateralEdges = [x for x in edgesList if x.height()[1] == 0]
-        return(all([all([x.normal(color) == [kernel for kernel in kernelList if color in kernel.colors][0].normal(color) for color in x.colors]) for x in lateralEdges]))
-    
-    def testStep4(self):
-        # test yellow cross
-        assertion = [x.normal("yellow") == [0,1,0] for x in yellowList if (len(x.colors) == 2 or len(x.colors) == 1)]
-        return all(assertion)
-
-    def testStep5(self):
-        # test yellow edges
-        assertion = [[x.normal(color) == [kernel for kernel in kernelList if kernel.colors[0] == color][0].normal(color) for color in x.colors if color != "yellow"][0] for x in yellowList if len(x.colors) == 2]
-        return all(assertion)
-    
-    def testStep6(self):
-        # test yellow corners are placed
-        assertion = [[x.normal(color) == [kernel for kernel in kernelList if kernel.colors[0] == color][0].normal(color) for color in x.colors if color != "yellow"][0] for x in yellowList if len(x.colors) == 3]
-        assertion = [
-            [
-                [Vector([kernel for kernel in kernelList if color in kernel.colors][0].height())for color in x.colors if color!= "yellow"][0]
-                + [Vector([kernel for kernel in kernelList if color in kernel.colors][0].height())for color in x.colors if color!= "yellow"][1]
-                + Vector(0,1,0) == Vector(x.height())][0]
-            for x in yellowList if len(x.colors) == 3]
-        return all(assertion)
-    
-    def testStep7(self):
-        # test yellow corners are placed
-        assertion = [[x.normal(color) == [kernel for kernel in kernelList if kernel.colors[0] == color][0].normal(color) for color in x.colors if color != "yellow"][0] for x in yellowList if len(x.colors) == 3]
-        return all(assertion)
-
-tester  = Tester()
 
 tempPath = 'G:\My Drive\Maya\MyScripts\Rubix\Testing\Temp'
 errorPath = 'G:\My Drive\Maya\MyScripts\Rubix\Testing\Errors'
@@ -1391,8 +1457,10 @@ fileNames = [
     "step6",
     "step7",
 ]
+scrambleCounter = 10
+maxIterations = 2
 
-def testSuite(iterations):
+def testSuite():
     def testingRecursion(counter):
         if(counter >= maxIterations):
             return
@@ -1449,8 +1517,8 @@ def testSuite(iterations):
         scrambleCounter += 1
         testingRecursion(counter +1)
 
-    testingRecursion(iterations)    
-testSuite(1)
+    testingRecursion(0)    
+testSuite()
     
 tester.close()
 
@@ -1463,7 +1531,8 @@ tester.close()
 # Step5__swapYellowEdges()
 # Step6__positionYellowCorners()
 # print(tester.testStep6())
-Step7__orientYellowCorners()
+# Step7__orientYellowCorners()
+# print(tester.testStep7())
 
 
 
